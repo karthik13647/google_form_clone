@@ -4,6 +4,7 @@
 
 {% block content %}
 <div class="container mt-5">
+    <!-- Header Section -->
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2>Your Forms</h2>
         <div>
@@ -12,20 +13,25 @@
         </div>
     </div>
     
+    <!-- Forms List -->
     {% if forms %}
         <div class="row">
             {% for form in forms %}
             <div class="col-md-4 mb-4">
-                <div class="card">
+                <div class="card h-100">
                     <div class="card-body">
                         <h5 class="card-title">{{ form.title }}</h5>
                         <p class="card-text">{{ form.description }}</p>
-                        <p class="card-text"><small class="text-muted">Created: {{ form.created_at.strftime('%Y-%m-%d') }}</small></p>
+                        <p class="card-text">
+                            <small class="text-muted">Created: {{ form.created_at.strftime('%Y-%m-%d') }}</small>
+                        </p>
                         <div class="btn-group">
                             <a href="{{ url_for('edit_form', form_id=form.id) }}" class="btn btn-sm btn-outline-primary">Edit</a>
                             <a href="{{ url_for('view_form', form_id=form.id) }}" class="btn btn-sm btn-outline-secondary">View</a>
                             <button type="button" class="btn btn-sm btn-outline-danger" 
-                                    onclick="confirmDelete({{ form.id }})">Delete</button>
+                                    onclick="confirmDelete({{ form.id }})">
+                                Delete
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -53,22 +59,27 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <form id="deleteForm" method="POST" style="display: inline;">
+                    {# Uncomment the next line if using Flask-WTF CSRF protection #}
+                    {# {{ csrf_token() }} #}
                     <button type="submit" class="btn btn-danger">Delete</button>
                 </form>
             </div>
         </div>
     </div>
 </div>
-
 {% endblock %}
 
 {% block scripts %}
 <script>
-function confirmDelete(formId) {
-    const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
-    const deleteForm = document.getElementById('deleteForm');
-    deleteForm.action = `/form/${formId}/delete`;
-    deleteModal.show();
-}
+    // This function sets the action attribute for the delete form and shows the modal.
+    function confirmDelete(formId) {
+        const deleteModalEl = document.getElementById('deleteModal');
+        const deleteForm = document.getElementById('deleteForm');
+        // Update form action to the specific delete route.
+        deleteForm.action = `/form/${formId}/delete`;
+        // Create a new Bootstrap Modal instance and show it.
+        const deleteModal = new bootstrap.Modal(deleteModalEl);
+        deleteModal.show();
+    }
 </script>
-{% endblock %} 
+{% endblock %}

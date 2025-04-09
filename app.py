@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory,current_app
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -7,6 +7,8 @@ from datetime import datetime
 import PyPDF2
 from werkzeug.utils import secure_filename
 import json
+import re
+
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.urandom(24)
@@ -94,8 +96,9 @@ class PDFUpload(db.Model):
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     form_id = db.Column(db.Integer, db.ForeignKey('form.id'), nullable=True)
-    user = db.relationship('User', backref='pdf_uploads')
-    form = db.relationship('Form', backref='pdf_upload')
+    user = db.relationship('User', backref='pdf_uploads')  # note plural
+    form = db.relationship('Form', backref='pdf_uploads')    # note plural
+
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -227,20 +230,25 @@ def delete_form(form_id):
         return redirect(url_for('dashboard'))
     
     try:
-        # Delete associated PDF upload if exists
+        # Delete associated PDFUpload record and file if it exists
         pdf_upload = PDFUpload.query.filter_by(form_id=form.id).first()
         if pdf_upload:
-            # Delete the PDF file
             pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], pdf_upload.filename)
             if os.path.exists(pdf_path):
                 os.remove(pdf_path)
+                current_app.logger.info(f"Deleted PDF file: {pdf_path}")
+            else:
+                current_app.logger.warning(f"PDF file not found: {pdf_path}")
             db.session.delete(pdf_upload)
+            current_app.logger.info("PDFUpload record deleted")
         
-        # Delete the form (this will cascade delete questions and responses)
+        # Delete the form; cascade will remove associated questions and responses
         db.session.delete(form)
         db.session.commit()
         flash('Form deleted successfully')
+        current_app.logger.info(f"Form {form_id} deleted successfully")
     except Exception as e:
+        current_app.logger.error(f"Error deleting form {form_id}: {str(e)}")
         db.session.rollback()
         flash('Error deleting form')
     
@@ -377,6 +385,17 @@ def extract_questions_from_pdf(pdf_path):
         flash(f'Error processing PDF: {str(e)}')
     return questions
 
+
+def clean_option_text(text):
+    # Convert the input into a string, if it isn't already.
+    text = str(text)
+    # Remove unwanted characters like square brackets and smart quotes
+    for ch in ['[', ']', '\u201c', '\u201d']:
+        text = text.replace(ch, '')
+    # Remove any leading or trailing single/double quotes using regex
+    text = re.sub(r"^['\"]+|['\"]+$", "", text)
+    return text.strip()
+
 @app.route('/upload_pdf', methods=['GET', 'POST'])
 @login_required
 def upload_pdf():
@@ -426,7 +445,15 @@ def upload_pdf():
                         order=i
                     )
                     if 'options' in q:
-                        question.set_options(q['options'])
+                        raw_options = q['options']
+                        # Check if raw_options is a list or a string
+                        if isinstance(raw_options, list):
+                            # Clean each option in the list and join them with commas
+                            cleaned_options = ','.join([clean_option_text(opt) for opt in raw_options])
+                        else:
+                            # Assume it's a string and clean it directly
+                            cleaned_options = clean_option_text(raw_options)
+                        question.set_options(cleaned_options)
                     db.session.add(question)
                 
                 pdf_upload.form_id = form.id
@@ -439,6 +466,7 @@ def upload_pdf():
                 return redirect(url_for('upload_pdf'))
     
     return render_template('upload_pdf.html')
+
 
 if __name__ == '__main__':
     with app.app_context():
