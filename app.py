@@ -94,12 +94,10 @@ class PDFUpload(db.Model):
     filename = db.Column(db.String(255), nullable=False)
     original_filename = db.Column(db.String(255), nullable=False)
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    form_id = db.Column(db.Integer, db.ForeignKey('form.id'), nullable=True)
-    user = db.relationship('User', backref='pdf_uploads')  # note plural
-    form = db.relationship('Form', backref='pdf_uploads')    # note plural
+    user_id = db.Column(db.Integer, nullable=False)
 
-
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() == 'pdf'
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -254,8 +252,6 @@ def delete_form(form_id):
     
     return redirect(url_for('dashboard'))
 
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() == 'pdf'
 
 def extract_questions_from_pdf(pdf_path):
     questions = []
